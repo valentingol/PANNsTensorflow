@@ -1,0 +1,10 @@
+*.hdf5
+*.pyc
+*.wav
+__pycache__
+*/__pycache__
+_logs
+*.pth
+.vscode
+.env
+data/*
