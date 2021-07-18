@@ -26,7 +26,7 @@ optimizer = tf.keras.optimizers.Adam(
     amsgrad=True,
     name="Adam",
     )
-model.complile(optimizer=optimizer))
+model.complile(optimizer=optimizer)
 #%% Loss (categorical cross-entropy)
 def loss_func(output_dict, target_dict):
     f_mean = tf.reduce_mean
