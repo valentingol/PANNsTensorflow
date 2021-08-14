@@ -2,16 +2,11 @@ import argparse
 import os
 import sys
 
-import pytest
-
 from lib.options import Options
 
-@pytest.fixture(scope="module")
-def parser():
-    return
-
-# Calling pytest <this file> --options causes the parser to get <this file>
-# and options as unexpected argument(s). The following line solves the problem.
+# Running 'pytest <this file> <options>' causes the parser
+# to get <this file> and <options> as arguments (unexpected).
+# The following line solves the problem.
 sys.argv = ['pytest']
 
 def test_init():
@@ -32,7 +27,7 @@ def test_add_arguments_parser():
     assert variables['mixup'] is False
     assert options.initialized is True
     group_names = [group.title for group in newparser._action_groups]
-    for group_name in ['Data', 'Model', 'Training']:
+    for group_name in ['Data', 'Model', 'Training', 'Augmentation']:
         assert group_name in group_names, (f'{group_name} is missing in '
                                            'group names')
 

@@ -25,19 +25,34 @@ class Options():
 
         # options related to model
         g_model = parser.add_argument_group('Model')
+        g_model.add_argument('--name', type=str, default='pann',
+                             help='Name of the model')
 
         # options related to training
         g_training = parser.add_argument_group('Training')
+        g_training.add_argument('--load_checkpoint', type=str, default='',
+                               help='Path to load a previous trained model if '
+                               'not empty (default empty)')
         g_training.add_argument('--batch_size', type=int, default=32,
                                 help='Batch size')
         g_training.add_argument('--learning_rate', type=float, default=1e-4,
                                 help='Learning rate')
-        g_training.add_argument('--ams_grad', action='store_true',
-                                help='Use AMSGrad variant of Adam')
-        g_training.add_argument('--iters_per_cycle', type=int, default=1000,
-                                help='Number of training iterations per cycle')
+        g_training.add_argument('--optimizer', type=str, default='AMSgrad',
+                                help=('Optimizer used for training, one of ',
+                                      'SGD, Adam, AMSGrad (default)'))
         g_training.add_argument('--n_cycles', type=int, default=5,
                                 help='Number of validation/checkpoint cycles')
+        g_training.add_argument('--iters_per_cycle', type=int, default=1000,
+                                help='Number of training iterations per cycle')
+        g_training.add_argument('--save_freq', type=int, default=1,
+                                help='Frequency (in terms of cycles) of '
+                                'saving the model')
+        g_training.add_argument('--training_time', type=int, default=0,
+                                help=('Maximum time of training (in seconds), '
+                                      'no limit if 0 (default)'))
+
+        # options related to data augmentation
+        g_training = parser.add_argument_group('Augmentation')
         g_training.add_argument('--mixup', action='store_true',
                                 help='Use mix-up during training')
 
