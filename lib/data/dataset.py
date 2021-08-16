@@ -2,13 +2,14 @@ import tensorflow as tf
 import numpy as np
 import os
 import h5py
+from utils.prepare_data import int16_to_float32
 
 class AudioDataset:
-    """Dataset class for GTZAN dataset.
-    """
+    """Dataset class for Ausio datasets."""
+
     def __init__(self, holdout_fold: int=2,shuffle:bool=True, 
-                 sample_rate: int=32000,max_time: int=30, 
-                 path: str='datasets/genres', h5py_path: str=None):
+                 sample_rate: int=32000, max_time: int=30, 
+                 path: str='audioset.h5'):
         """
         Parameters
         ----------
@@ -22,42 +23,32 @@ class AudioDataset:
             Time of waveform sequence. Sequences are padded or
             truncated to max_time lenght, by default 30.
         path : str, optional
-            Path of data folder of GTZAN,
-            by default 'datasets/genres'.
-        h5py_path : str or None, optional
-            Path of h5 file if it exist. Otherwise, data will
-            be loaded !![where?], by default None.
+            Path of '.h5' file where custom data are strored,
+            Use preprocessing to generate such a file
+            by default 'audioset.h5'.
         """
-
         self.holdout_fold = holdout_fold
         self.shuffle = shuffle
         self.sample_rate = sample_rate
         self.max_time = max_time
         self.clip_samples = max_time * sample_rate
         self.path = path
-        self.lb_to_idx = {lb: idx for idx, lb in enumerate(labels)}
-        self.idx_to_lb = {idx: lb for idx, lb in enumerate(labels)}
-        self.classes_num = len(labels)
-        self.packed_hdf5_path = h5py_path
-
-        print(f"Loading format is {loading_format}.")
-
-        if loading_format == ".h5py" and self.packed_hdf5_path is None:
-            self.packed_hdf5_path = os.path.join(self.path, "GTZAN_dataset.h5")
-            print(f"Convert audio files to {loading_format} in "
-                  f"{self.packed_hdf5_path}...")
-            self.pack_audio_files_to_hdf5()
-        else:
-            "!![handle case loading_format != '.h5py'"
+        with h5py.File(self.path, 'r') as hf:
+            self.classes_num = tf.cast(hf['classes_num'], tf.int64)
+        
+        # self.lb_to_idx = {lb: idx for idx, lb in enumerate(labels)}
+        # self.idx_to_lb = {idx: lb for idx, lb in enumerate(labels)}
+        # self.classes_num = len(labels)
 
     def train_generator(self):
-        """ !![one-line summary] """
-        with h5py.File(self.packed_hdf5_path, 'r') as f:
-            while True: # !![comment]
+        """ Generator feeding training dataset """
+        with h5py.File(self.path, 'r') as f:
+            # allow to run through dataset circularly
+            while True:
                 for i in self.indexes_train:
                     audio_name = f['audio_name'][i]
                     waveform = tf.expand_dims(
-                                    self.int16_to_float32(f["waveform"][i]),
+                                    int16_to_float32(f["waveform"][i]),
                                     axis=-1
                                     )
                     target = f["target"][i]
@@ -69,12 +60,13 @@ class AudioDataset:
                     self.indexes_train = tf.random.shuffle(self.indexes_train)
 
     def val_generator(self):
-        """ !![one-line summary] """
-        with h5py.File(self.packed_hdf5_path, 'r') as f:
+        """ Generator feeding validation dataset """
+        with h5py.File(self.path, 'r') as f:
+            # run through dataset only one time
             for i in self.indexes_val:
                 audio_name = f["audio_name"][i]
                 waveform = tf.expand_dims(
-                               self.int16_to_float32(f["waveform"][i]),
+                               int16_to_float32(f["waveform"][i]),
                                axis=-1
                                )
                 target = f["target"][i]
@@ -106,18 +98,20 @@ class AudioDataset:
         """
         self.random_seed = random_seed
 
-        with h5py.File(self.packed_hdf5_path, 'r') as hf:
+        #Creation of a balanced validation set
+        with h5py.File(self.path, 'r') as hf:
             folds = tf.cast(hf['fold'][:], tf.int64)
         self.holdout_fold = tf.cast(self.holdout_fold, tf.int64)
         self.indexes_train = tf.where(folds != self.holdout_fold)[:, 0]
         self.indexes_val = tf.where(folds == self.holdout_fold)[:, 0]
-        # !![w is not explicit: change name]
-        self.w = tf.where(folds == self.holdout_fold)
+
+        # shuffle data if shuffle==True
         if self.shuffle:
             tf.random.set_seed(self.random_seed)
             self.indexes_train = tf.random.shuffle(self.indexes_train)
             self.indexes_val = tf.random.shuffle(self.indexes_val)
 
+        # Train Dataset creation
         train_ds = tf.data.Dataset.from_generator(
                     self.train_generator,
                     output_signature=({
@@ -129,6 +123,7 @@ class AudioDataset:
                     })
                     )
 
+        # Validation Dataset creation
         val_ds = tf.data.Dataset.from_generator(
                 self.val_generator,
                 output_signature=({
@@ -139,10 +134,8 @@ class AudioDataset:
                                         dtype=tf.float32)
                 })
                 )
-        # prepare data
-        train_ds = train_ds.batch(self.batch_size).cache()
-        val_ds = val_ds.batch(self.batch_size).cache()
-        return train_ds.batch(self.batch_size), val_ds.batch(self.batch_size)
+
+        return train_ds, val_ds
 
 
 dataset = DatasetGTZAN(augmentation=augmentation,
