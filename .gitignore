@@ -7,4 +7,12 @@ _logs
 *.pth
 .vscode
 .env
+# data and models
 data/*
+models/*
+# gitignore related
+..gitignore.swp
+# pytest-cov related
+.pytest_cache
+.coverage
+*.egg-info
