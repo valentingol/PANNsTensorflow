@@ -311,8 +311,6 @@ class DatasetGTZAN:
         self.holdout_fold = tf.cast(self.holdout_fold, tf.int64)
         self.indexes_train = tf.where(folds != self.holdout_fold)[:, 0]
         self.indexes_val = tf.where(folds == self.holdout_fold)[:, 0]
-        # !![w is not explicit: change name]
-        self.w = tf.where(folds == self.holdout_fold)
         if self.shuffle:
             tf.random.set_seed(self.random_seed)
             self.indexes_train = tf.random.shuffle(self.indexes_train)
