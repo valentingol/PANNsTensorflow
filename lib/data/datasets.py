@@ -21,14 +21,15 @@ class AudioDataLoaderH5:
         max_time : int, optional
             Audio file duration, in seconds. By default 30.
         """
+        path = os.path.normpath(path)
         # check whether path leads to an h5 file or to the dataset folder
-        if self._get_file_extension(path) == ".h5":
+        if os.path.splitext(os.path.split(path)[1])[1] == ".h5":
             # self.path leads to a .h5 file
-            print("Loading h5 file '", self._get_filename(path) ,"'.")
+            print("Loading h5 file '", os.path.split(path)[-1] ,"'.")
             packed_hdf5_path = path
         else:
             # the name of the h5 file is the dataset folder name
-            h5_file_name = self._get_filename(path) + ".h5"
+            h5_file_name = os.path.split(path)[-1] + ".h5"
 
             # h5 file will be in the same folder as packed data
             packed_hdf5_path = os.path.join(path, h5_file_name)
@@ -49,6 +50,7 @@ class AudioDataLoaderH5:
         print("'", packed_hdf5_path, "' loaded")
 
         self.packed_hdf5_path = packed_hdf5_path
+
 
     @staticmethod
     def file_exists(file_name: str, path :str):
@@ -71,40 +73,6 @@ class AudioDataLoaderH5:
                 return True
         return False
 
-    @staticmethod
-    def _get_file_extension(path :str):
-        """Returns the name of the extension of the file 
-        indicated in path.
-
-        Parameters
-        ----------
-        path : str
-            Path leading to a file.
-
-        Returns
-        -------
-        extension : str
-            Extension of the file indicated in path.
-        """
-        extension = os.path.splitext(os.path.split(path)[1])[1]
-        return extension
-
-    @staticmethod
-    def _get_filename(path :str):
-        """Returns the name of the file indicated in path.
-
-        Parameters
-        ----------
-        path : str
-            path leading to a file.
-
-        Returns
-        -------
-        filename : str
-            Name of the file indicated in path.
-        """
-        filename = os.path.split(path)[-1]
-        return filename
 
     @staticmethod
     def _get_class_sizes_list(dataset_folder_path :str):
@@ -126,10 +94,12 @@ class AudioDataLoaderH5:
             class_path = os.path.join(dataset_folder_path, class_name)
             if os.path.isdir(class_path):
                 class_sizes_list.append(0)
-                for _ in os.listdir(class_path):
-                    class_sizes_list[-1] = class_sizes_list[-1]+1
+                for elem in os.listdir(class_path):
+                    if os.path.isfile(elem):
+                        class_sizes_list[-1] = class_sizes_list[-1]+1
 
         return class_sizes_list
+
 
     def _get_class_sizes_dict(self, class_sizes_list: list):
         """Returns the a dictionnary holding the 
@@ -150,8 +120,28 @@ class AudioDataLoaderH5:
         class_sizes={}
         for index, label in enumerate(self.idx_to_labels):
             class_sizes[label] = class_sizes_list[index]
-
         return class_sizes
+
+
+    def get_label_list(self, dataset_folder_path: str):
+        """Returns the a dictionnary holding the 
+        number of samples for each class.
+
+         Parameters
+        ----------
+        class_sizes_list : list
+            class_sizes_list[index] indicate the number 
+            of samples corresponding to index class index.
+
+        Returns
+        -------
+        class_sizes : dict
+            Dictionnary with class labels as key, 
+            and the corresponding number of samples as value.
+        """
+        return [name for name in os.listdir(dataset_folder_path) 
+                     if os.path.isdir(os.path.join(dataset_folder_path, name))]
+
 
     def _generate_h5_file(self, dataset_folder_path: str, 
                           packed_hdf5_path: str, max_time: int=30, 
@@ -170,9 +160,7 @@ class AudioDataLoaderH5:
         clip_samples = max_time * sample_rate
         # list of class names of the dataset
         # it ignores files in the dataset folder that are not folders
-        idx_to_labels = [name for name in os.listdir(dataset_folder_path) 
-                       if os.path.isdir(os.path.join(dataset_folder_path, 
-                                                     name))]
+        idx_to_labels = self.get_label_list(dataset_folder_path)
 
         # mapping class names to class indexes
         labels_to_idx = {
@@ -194,9 +182,10 @@ class AudioDataLoaderH5:
                                  sample_rate, labels_to_idx, 
                                  idx_to_labels, class_sizes_list)
 
+
     def _load_h5_file_metadata(self, packed_hdf5_path: str):
-        """Load all metadata (sample_rate, clip_samples, [...]) 
-        of an existing h5 dataset.
+        """Load all metadata 
+        (sample_rate, clip_samples, [...]) of an existing h5 dataset.
 
         Parameters
         ----------
@@ -216,6 +205,7 @@ class AudioDataLoaderH5:
             self.class_size = self.class_sizes_list[0]
             self.classes_num = len(self.idx_to_labels)
 
+
     def get_information(self):
         """Print main information about the dataset"""
         print("h5 file where dataset is stored : ", self.packed_hdf5_path)
@@ -225,20 +215,20 @@ class AudioDataLoaderH5:
         print("Number of labels  : ", self.classes_num)
         print("Class sizes : ", self.class_sizes)
 
+
     def _train_generator(self):
         """ Generator feeding training dataset."""
         with h5py.File(self.packed_hdf5_path, 'r') as f:
-            # allow to run through dataset circularly
-            while True:
-                for i in self.indexes_train:
-                    audio_name = f["audio_name"][i]
-                    waveform = int16_to_float32(f["waveform"][i])
-                    target = f["target"][i]
-                    yield {
-                        "audio_name" : audio_name, 
-                        "waveform": waveform, 
-                        "target": target
-                    }
+            for i in self.indexes_train:
+                audio_name = f["audio_name"][i]
+                waveform = int16_to_float32(f["waveform"][i])
+                target = f["target"][i]
+                yield {
+                    "audio_name" : audio_name, 
+                    "waveform": waveform, 
+                    "target": target
+                }
+
 
     def _val_generator(self):
         """ Generator feeding validation dataset."""
@@ -253,16 +243,15 @@ class AudioDataLoaderH5:
                     "waveform": waveform, 
                     "target": target
                 }
-
-    #!! val_prop
-    def __call__(self):
-        #! NOTE dictionary x2
+    ##! NOTE : test_prop argument
+    ##! NOTE : test -> val
+    def __call__(self, val_prop: float=0.2):
         """Create train and validation datasets.
 
         Returns
         -------
         train_dataset : tf.data.Dataset
-            Dataset containing dictionnary of format:
+            Dataset containing dictionnaries of format:
             {
                 "audio_name": tf.string,
                 "waveform": tf.Tensor, shape=(clip_samples,), dtype=tf.float32
@@ -278,8 +267,9 @@ class AudioDataLoaderH5:
             }
         """
         # creation of a balanced validation and train set
+        ##! IDEE : val a la meme prop dans chaque classe que pour le train 
         val_fold = tf.random.uniform((), 0, min(self.class_sizes_list)-1,
-                                         dtype=tf.int64)
+                                        dtype=tf.int64)
         with h5py.File(self.packed_hdf5_path, 'r') as hf:
             folds = tf.cast(hf['fold'], tf.int64)
 
@@ -311,20 +301,23 @@ class AudioDataLoaderH5:
             )
         return train_ds, val_ds
 
+
 if __name__ == "__main__":
     # test the function with GTZAN
     datasets = AudioDataLoaderH5("datasets/GTZAN_small")
     train, val = datasets()
-    
+
+    datasets.get_information()
+
     # print firsts train dataset elements
     for i, data in enumerate(train):
         print(f'Sample {i}, name {data["audio_name"]}, label {data["target"]}.')
         if i >= 50:
             break
-    
+
     train = train.shuffle(100)
     train = train.batch(2)
-    
+
     for i, batch in enumerate(train):
         print(f'Batch {i}, names {batch["audio_name"]}, labels {batch["target"]}.')
         if i >= 50:
