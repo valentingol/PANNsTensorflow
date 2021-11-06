@@ -14,7 +14,9 @@ class AudioDataLoaderH5:
         Parameters
         ----------
         path : str
-            Path leading to data.
+            Path leading to the dataset containor. Dataset container is
+            either a folder containing subfolders of audio files or a 
+            a single .h5 file with good format.
         sample_rate : int, optional
             Sample rate used to sample data from audio files. 
             By default 32000.
@@ -22,6 +24,9 @@ class AudioDataLoaderH5:
             Audio file duration, in seconds. By default 30.
         """
         path = os.path.normpath(path)
+        self.dataset_folder_path = path
+        self.sample_rate = sample_rate
+        self.max_time = max_time
         # check whether path leads to an h5 file or to the dataset folder
         if os.path.splitext(os.path.split(path)[1])[1] == ".h5":
             # self.path leads to a .h5 file
@@ -33,6 +38,7 @@ class AudioDataLoaderH5:
 
             # h5 file will be in the same folder as packed data
             packed_hdf5_path = os.path.join(path, h5_file_name)
+            self.packed_hdf5_path = packed_hdf5_path
 
             if self.file_exists(h5_file_name, path):
                 # if h5 file does already exist
@@ -43,13 +49,10 @@ class AudioDataLoaderH5:
                 # if not, h5 file generation and loading
                 print("No existing'", packed_hdf5_path, "' h5 file found")
                 print("New '", packed_hdf5_path, "' creation on its way...")
-                self._generate_h5_file(path, packed_hdf5_path, max_time, 
-                                       sample_rate)
+                self._generate_h5_file()
 
-        self._load_h5_file_metadata(packed_hdf5_path)
+        self._load_h5_file_metadata()
         print("'", packed_hdf5_path, "' loaded")
-
-        self.packed_hdf5_path = packed_hdf5_path
 
 
     @staticmethod
@@ -74,14 +77,8 @@ class AudioDataLoaderH5:
         return False
 
 
-    @staticmethod
-    def _get_class_sizes_list(dataset_folder_path :str):
+    def _get_class_sizes_list(self):
         """Returns the list of number of samples for each class.
-
-        Parameters
-        ----------
-        dataset_folder_path : str
-            path leading to the dataset.
 
         Returns
         -------
@@ -90,26 +87,20 @@ class AudioDataLoaderH5:
             samples of the class self.index_to_labels[index].
         """
         class_sizes_list=[]
-        for class_name in os.listdir(dataset_folder_path):
-            class_path = os.path.join(dataset_folder_path, class_name)
+        for class_name in os.listdir(self.dataset_folder_path):
+            class_path = os.path.join(self.dataset_folder_path, class_name)
             if os.path.isdir(class_path):
                 class_sizes_list.append(0)
                 for elem in os.listdir(class_path):
-                    if os.path.isfile(elem):
+                    if not(os.path.isfile(elem)) and elem.endswith('.wav'):
                         class_sizes_list[-1] = class_sizes_list[-1]+1
 
         return class_sizes_list
 
 
-    def _get_class_sizes_dict(self, class_sizes_list: list):
+    def _get_class_sizes_dict(self):
         """Returns the a dictionnary holding the 
         number of samples for each class.
-
-         Parameters
-        ----------
-        class_sizes_list : list
-            class_sizes_list[index] indicate the number 
-            of samples corresponding to index class index.
 
         Returns
         -------
@@ -118,49 +109,33 @@ class AudioDataLoaderH5:
             and the corresponding number of samples as value.
         """
         class_sizes={}
+        class_sizes_list = self._get_class_sizes_list()
         for index, label in enumerate(self.idx_to_labels):
             class_sizes[label] = class_sizes_list[index]
         return class_sizes
 
 
-    def get_label_list(self, dataset_folder_path: str):
-        """Returns the a dictionnary holding the 
-        number of samples for each class.
-
-         Parameters
-        ----------
-        class_sizes_list : list
-            class_sizes_list[index] indicate the number 
-            of samples corresponding to index class index.
+    def get_label_list(self):
+        """Returns the a list of labels of the dataset.
 
         Returns
         -------
-        class_sizes : dict
+        idx_to_labels : list
             Dictionnary with class labels as key, 
             and the corresponding number of samples as value.
         """
-        return [name for name in os.listdir(dataset_folder_path) 
-                     if os.path.isdir(os.path.join(dataset_folder_path, name))]
+        return [name for name in os.listdir(self.dataset_folder_path) 
+                     if os.path.isdir(os.path.join(self.dataset_folder_path, name))]
 
 
-    def _generate_h5_file(self, dataset_folder_path: str, 
-                          packed_hdf5_path: str, max_time: int=30, 
-                          sample_rate: int=32000):
+    def _generate_h5_file(self):
         """Generate h5 file packing data stored in
         dataset_folder_path.
-
-        Parameters
-        ----------
-        dataset_folder_path : str
-            Path leading to data class folders.
-        packed_hdf5_path : str
-            Path leading the folder where the h5 file will
-            be generate.
         """
-        clip_samples = max_time * sample_rate
+        clip_samples = self.max_time * self.sample_rate
         # list of class names of the dataset
         # it ignores files in the dataset folder that are not folders
-        idx_to_labels = self.get_label_list(dataset_folder_path)
+        idx_to_labels = self.get_label_list()
 
         # mapping class names to class indexes
         labels_to_idx = {
@@ -172,36 +147,34 @@ class AudioDataLoaderH5:
 
         # for each class, class_sizes_list[i] is the number samples of the 
         # class with label idx_to_labels[i]
-        class_sizes_list = self._get_class_sizes_list(dataset_folder_path)
+        class_sizes_list = self._get_class_sizes_list()
 
-        print(f"Convert audio files to .h5 in {packed_hdf5_path}   ...")
+        print(f"Convert audio files to .h5 in {self.packed_hdf5_path}   ...")
 
         # pack dataset in h5 file
-        pack_audio_files_to_hdf5(dataset_folder_path, packed_hdf5_path, 
+        pack_audio_files_to_hdf5(self.dataset_folder_path, 
+                                 self.packed_hdf5_path, 
                                  clip_samples, classes_num, 
-                                 sample_rate, labels_to_idx, 
+                                 self.sample_rate, labels_to_idx, 
                                  idx_to_labels, class_sizes_list)
+        
+        self._load_h5_file_metadata()
 
 
-    def _load_h5_file_metadata(self, packed_hdf5_path: str):
+    def _load_h5_file_metadata(self):
         """Load all metadata 
         (sample_rate, clip_samples, [...]) of an existing h5 dataset.
-
-        Parameters
-        ----------
-        packed_hdf5_path : str
-            Path leading to an h5 file.
         """
-        print("h5 file stored in '", packed_hdf5_path, 
+        print("h5 file stored in '", self.packed_hdf5_path, 
               "' is considered for tf.data.Dataset creation")
 
-        self.packed_hdf5_path = packed_hdf5_path
-        with h5py.File(packed_hdf5_path, 'r') as f:
+        self.packed_hdf5_path = self.packed_hdf5_path
+        with h5py.File(self.packed_hdf5_path, 'r') as f:
             self.sample_rate = f.attrs["sample_rate"]
             self.clip_samples = f.attrs["clip_samples"]
             self.idx_to_labels = f.attrs["labels"]
             self.class_sizes_list = f.attrs["classes_size"]
-            self.class_sizes = self._get_class_sizes_dict(self.class_sizes_list)
+            self.class_sizes = self._get_class_sizes_dict()
             self.class_size = self.class_sizes_list[0]
             self.classes_num = len(self.idx_to_labels)
 
@@ -304,7 +277,7 @@ class AudioDataLoaderH5:
 
 if __name__ == "__main__":
     # test the function with GTZAN
-    datasets = AudioDataLoaderH5("datasets/GTZAN_small")
+    datasets = AudioDataLoaderH5("lib/data/datasets/GTZAN_small")
     train, val = datasets()
 
     datasets.get_information()
