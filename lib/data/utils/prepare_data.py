@@ -8,48 +8,61 @@ import tensorflow as tf
 from tqdm import tqdm
 
 
-def browse_folder(fd: str): # !![fd not enough explicit: change name]
-    """ !![one-line summary] """
-    paths, names = [], []
-    for root, _, files in os.walk(fd):
-        for name in files:
-            if name.endswith('.wav'):
-                filepath = os.path.join(root, name)
-                names.append(name)
-                paths.append(filepath)
-    return names, paths
-
 def float32_to_int16(x: tf.Tensor):
     """ !![one-line summary] """
     maxi = tf.reduce_max(tf.abs(x))
-    if maxi > 1.0: # !![why?: comment]
+    if maxi > 1.0: 
         x /= maxi
     return tf.cast(x * (2.0**15 - 1), tf.int16)
 
-def to_one_hot(k: int, classes_num: int):
-    """ !![one-line summary] """
-    return tf.one_hot(k, classes_num)
-
 def pad_truncate_sequence(x: tf.Tensor, clip_samples: int):
-    """ !![one-line summary, precise that x is an 1-D tensor] """
+    """ Truncate or pad a sequence 
+    to a fixed length of clip_samples. 
+    Parameters
+    ----------
+    x: tf.Tensor
+        Input tensor we want to pad or truncate.
+    clip_samples: int
+        The length of the sequence after padding or truncation.
+    Returns
+    -------
+    tf.Tensor
+        The padded or truncated sequence.
+    
+    """ 
     if len(x) < clip_samples:
         return tf.concat([x, np.zeros(clip_samples - len(x))], axis=0)
     else:
         return x[0:clip_samples]
 
 def get_target(audio_name: str, lb_to_idx: int):
-    """ !![one-line summary] """
+    """ Return the target of the audio file. """
     return lb_to_idx[audio_name.split('.')[0]]
 
 def int16_to_float32(x: tf.Tensor):
-    """ !![one-line summary] """
+    """ Convert int16 to float32. """
     return tf.cast(x, tf.float32) / (2.0**15 - 1.0)
 
-def traverse_folder(fd):
+def extract_audio_samples(dataset_path: str):
+    """ Extract audio names and paths 
+    from the dataset folder stored in 
+    dataset_path.
+
+    Parameters
+    ----------
+    dataset_path: str
+        The path to the dataset folder.
+    Returns
+    -------
+    audio_names: list
+        The list of audio names.
+    audio_paths: list
+        The list of audio paths.
+    """
     paths = []
     names = []
 
-    for root, dirs, files in os.walk(fd):
+    for root, dirs, files in os.walk(dataset_path):
         for name in files:
             if name.endswith('.wav'):
                 filepath = os.path.join(root, name)
@@ -62,17 +75,34 @@ def pack_audio_files_to_hdf5(path: str, packed_hdf5_path: str,
                              clip_samples: int, classes_num: int, 
                              sample_rate: int, lb_to_idx: list, labels: list,
                              classes_size: dict):
-    """ !![one-line summary] """
+    """  Pack audio files stored in path to a hdf5 file.
+    Parameters
+    ----------
+    path: str
+        The path to the dataset folder.
+    packed_hdf5_path: str
+        The path to the hdf5 file.
+    clip_samples: int
+        The length of the audio clip.
+    classes_num: int
+        The number of classes.
+    sample_rate: int
+        The sample rate of the audio files.
+    lb_to_idx: list
+        The list of labels to index.
+    labels: list
+        The list of labels.
+    classes_size: dict
+        The dictionary of classes sizes.
+        """
     # Define paths
     audios_dir = os.path.join(path)
     if not packed_hdf5_path.endswith('.h5'):
         packed_hdf5_path += '.h5'
-    if os.path.exists(packed_hdf5_path):
-        os.remove(packed_hdf5_path)
     if os.path.dirname(packed_hdf5_path) != '':
         os.makedirs(os.path.dirname(packed_hdf5_path), exist_ok=True)
 
-    (audio_names, audio_paths) = traverse_folder(audios_dir)
+    (audio_names, audio_paths) = extract_audio_samples(audios_dir)
 
     audio_names = sorted(audio_names)
     audio_paths = sorted(audio_paths)
@@ -84,8 +114,8 @@ def pack_audio_files_to_hdf5(path: str, packed_hdf5_path: str,
     meta_dict = {
         'audio_name': np.array(audio_names),
         'audio_path': np.array(audio_paths),
-        'target': tf.convert_to_tensor(targets), # !![convert_to_tensor??]
-        'fold': tf.convert_to_tensor(np.arange(len(audio_names)) % 10 + 1)} # !![convert_to_tensor??]
+        'target': tf.convert_to_tensor(targets), 
+        'fold': tf.convert_to_tensor(np.arange(len(audio_names)) % 10 + 1)} 
 
     feature_time = time.time()
     with h5py.File(packed_hdf5_path, 'w') as hf:
@@ -114,6 +144,7 @@ def pack_audio_files_to_hdf5(path: str, packed_hdf5_path: str,
         hf.attrs["sample_rate"] = sample_rate
         hf.attrs["labels"] = labels
         hf.attrs["classes_size"] = classes_size
+        hf.attrs["targets"] = targets
 
         for i in tqdm(range(audios_num), total=audios_num):
             audio_name = meta_dict['audio_name'][i]
@@ -125,9 +156,9 @@ def pack_audio_files_to_hdf5(path: str, packed_hdf5_path: str,
                                             mono=True)
             audio = pad_truncate_sequence(audio, clip_samples)
 
-            hf['audio_name'][i] = audio_name.encode() # !![why encode?]
+            hf['audio_name'][i] = audio_name.encode()
             hf['waveform'][i] = float32_to_int16(audio)
-            hf['target'][i] = to_one_hot(target, classes_num)
+            hf['target'][i] = tf.one_hot(target, classes_num)
             hf['fold'][i] = fold
 
     print(f'Write hdf5 to {packed_hdf5_path}')
