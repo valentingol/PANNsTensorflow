@@ -1,4 +1,3 @@
-#%%
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 
@@ -133,7 +132,10 @@ class AudioDataLoaderH5:
             List of labels of the dataset.
         """
         return [name for name in os.listdir(self.dataset_folder_path) 
-                     if os.path.isdir(os.path.join(self.dataset_folder_path, name))]
+                     if os.path.isdir(os.path.join(self.dataset_folder_path, 
+                                                   name)
+                                      )
+                     ]
 
 
     def _generate_h5_file(self):
@@ -186,7 +188,7 @@ class AudioDataLoaderH5:
             self.class_size = self.class_sizes_list[0]
             self.classes_num = len(self.idx_to_labels)
             self.folds = tf.cast(f['fold'], tf.int64)
-            self.target = f.attrs['class_index']
+            self.target = f.attrs['targets']
 
 
     def get_information(self):
@@ -245,7 +247,7 @@ class AudioDataLoaderH5:
         
         Returns
         -------
-        (indexes_train, indexes_val) : tuple of list
+        (indexes_train, indexes_val) : tuple of lists
             indexes_train : tf.Tensor with shape (num_train_samples,)
                 indexes_train is a list of indexes of the training dataset.
             indexes_val : tf.Tensor with shape (num_val_samples,)
@@ -261,14 +263,16 @@ class AudioDataLoaderH5:
                 mid_i = [int(val_prop * self.class_sizes_list[i])]
                 end_i = [self.class_sizes_list[i]-mid_i[0]]
 
-                target = tf.random.shuffle(tf.squeeze(tf.where(self.target == i), axis=[-1]))
+                target = tf.random.shuffle(
+                    tf.squeeze(tf.where(self.target == i), axis=[-1])
+                    )
                 indexes_train.append(tf.slice(target, mid_i, end_i))
                 indexes_val.append(tf.slice(target, [0], mid_i))
         
         return tf.concat(indexes_train, axis=0), tf.concat(indexes_val, axis=0)
 
 
-    def __call__(self, val_prop: float=0.):
+    def __call__(self, val_prop: float=0.2):
         """Create train and validation datasets.
         Parameters
         ----------
@@ -320,7 +324,3 @@ class AudioDataLoaderH5:
                 })
             )
         return train_ds, val_ds
-
-
-
-
