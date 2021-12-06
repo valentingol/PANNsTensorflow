@@ -16,3 +16,4 @@ models/*
 .pytest_cache
 .coverage
 *.egg-info
+datasets/*
