@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 
 def float32_to_int16(x: tf.Tensor):
-    """ !![one-line summary] """
+    """ Convert tensor from float32 to int16. """
     maxi = tf.reduce_max(tf.abs(x))
     if maxi > 1.0: 
         x /= maxi
