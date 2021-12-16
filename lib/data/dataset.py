@@ -182,12 +182,11 @@ class AudioDataLoaderH5:
         with h5py.File(self.packed_hdf5_path, 'r') as f:
             self.sample_rate = f.attrs["sample_rate"]
             self.clip_samples = f.attrs["clip_samples"]
-            self.idx_to_labels = f.attrs["labels"]
-            self.class_sizes_list = f.attrs["classes_size"]
+            self.idx_to_labels = list(f.attrs["labels"])
+            self.class_sizes_list = list(f.attrs["classes_size"])
             self.class_sizes = self._get_class_sizes_dict()
             self.class_size = self.class_sizes_list[0]
             self.classes_num = len(self.idx_to_labels)
-            self.folds = tf.cast(f['fold'], tf.int64)
             self.target = f.attrs['targets']
 
 
